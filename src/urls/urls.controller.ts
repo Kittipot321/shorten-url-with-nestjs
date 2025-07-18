@@ -1,34 +1,53 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ValidationPipe, Req, Res } from '@nestjs/common';
 import { UrlsService } from './urls.service';
 import { CreateUrlDto } from './dto/create-url.dto';
-import { UpdateUrlDto } from './dto/update-url.dto';
+import { Request, Response } from 'express';
+import { UrlResponseDto } from './dto/url-reponse.dto';
+import { Url } from '@prisma/client';
 
-@Controller('urls')
+@Controller('')
 export class UrlsController {
   constructor(private readonly urlsService: UrlsService) {}
 
-  @Post()
-  create(@Body() createUrlDto: CreateUrlDto) {
-    return this.urlsService.create(createUrlDto);
+  @Post("api/shorten")
+  async createShortUrl(
+    @Body(ValidationPipe) dto : CreateUrlDto,
+    @Req() request: Request
+  ): Promise<UrlResponseDto> {
+    const baseUrl = `${request.protocol}://${request.get("host")}`
+    return this.urlsService.createShortUrl(dto, baseUrl)
   }
 
-  @Get()
-  findAll() {
-    return this.urlsService.findAll();
+
+  @Get(":shortCode")
+  async redirect(
+    @Param('shortCode') shortCode: string,
+    @Res() res: Response
+  )
+  {
+    try {
+      const originalUrl = await this.urlsService.getOriginalUrl(shortCode)
+      return res.redirect(301, originalUrl)
+    } catch (error) {
+      return res.status(404).json({ message: "Short URL not found."})
+    }
+  }
+  
+  @Get("api/urls")
+  async getAllUrls(): Promise<Url[]> {
+    return this.urlsService.getAllUrls();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.urlsService.findOne(+id);
+  @Get("api/stats/:shortCode")
+  async getUrlStats(@Param('shortCode') shortCode: string): Promise<UrlResponseDto> {
+    return this.urlsService.getUrlStats(shortCode);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUrlDto: UpdateUrlDto) {
-    return this.urlsService.update(+id, updateUrlDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.urlsService.remove(+id);
+  @Delete("api/urls/:shortCode")
+  async deleteUel(@Param('shortCode') shortCode: string): Promise<{ message: string }> {
+    await this.urlsService.deleteUrl(shortCode)
+    return {
+      message: "URL deleted successfully"
+    }
   }
 }
